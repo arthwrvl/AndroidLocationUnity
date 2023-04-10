@@ -167,7 +167,7 @@ public final class PluginInstance extends Application {
     public static String getAllSpots(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
-        return sharedPreferences.getString(LATLONG, "DEFAULT");
+        return sharedPreferences.getString(LOCATIONS, "DEFAULT");
     }
     public static String getCurrentPosition(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);

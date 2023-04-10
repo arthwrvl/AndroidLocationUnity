@@ -69,6 +69,7 @@ public class LocationService extends Service {
     public int updates = 0;
     ArrayList<Location> positions = new ArrayList<Location>();
     ArrayList<Location> fullPositions = new ArrayList<Location>();
+    String allSpots = "";
 
     Set<String> trackedLocations = new HashSet<String>();
 
@@ -144,7 +145,9 @@ public class LocationService extends Service {
                 editor.putFloat(PluginInstance.SPEED, speed);
                 editor.putInt(PluginInstance.ENDTIME, lapTime);
                 if(fullPositions.size() > 0){
-                    editor.putString(PluginInstance.LATLONG, lastKnownLocation.getLatitude()+"#"+lastKnownLocation.getLongitude()+"#"+lastKnownLocation.getAccuracy()+"-");
+                    allSpots += lastKnownLocation.getLatitude()+"#"+lastKnownLocation.getLongitude()+"#"+lastKnownLocation.getAccuracy()+"|";
+                    editor.putString(PluginInstance.LATLONG, lastKnownLocation.getLatitude()+"#"+lastKnownLocation.getLongitude()+"#"+lastKnownLocation.getAccuracy()+"|");
+                    editor.putString(PluginInstance.LOCATIONS, allSpots);
                 }
                 editor.apply();
                 Log.d("AHAHAHA", "run: " + formatClock(lapTime));
@@ -196,6 +199,7 @@ public class LocationService extends Service {
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10, 1, new LocationListener() {
             @Override
             public void onLocationChanged(Location location) {
+                SharedPreferences.Editor editor = sharedPreferences.edit();
                 if(lastKnownLocation == null){
                     lastKnownLocation = location;
                 }
@@ -211,7 +215,7 @@ public class LocationService extends Service {
                     }
                     if(maxDistance != 0 && minDistance != 0){
                         if(positions.size() > 0){
-                            SharedPreferences.Editor editor = sharedPreferences.edit();
+
                             Location current = positions.get(positions.size() - 1);
                             float dist = current.distanceTo(location);
                             editor.putString(PluginInstance.DISTANCETO, dist + " " + positions.size() + " " + updates);
