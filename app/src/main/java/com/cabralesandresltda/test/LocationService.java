@@ -60,16 +60,23 @@ public class LocationService extends Service {
     double longitude;
     float speed;
     float distance;
+    float currentRythm = 0;
+    float currentKMRythm = 0;
     public float minDistance = 10;
     public float maxDistance = 100;
     int wait = 10;
+    int lastRecordedTime = 0;
     Location lastKnownLocation = null;
     int timeStarted;
     private int lapTime;
+    private int lastKMTime = 0;
     public int updates = 0;
     ArrayList<Location> positions = new ArrayList<Location>();
+    ArrayList<Float> paces = new ArrayList<Float>();
     ArrayList<Location> fullPositions = new ArrayList<Location>();
     String allSpots = "";
+    float singleDistance = 0;
+    String allPaces = "";
 
     Set<String> trackedLocations = new HashSet<String>();
 
@@ -143,6 +150,7 @@ public class LocationService extends Service {
                 editor.putString(PluginInstance.TIME, formatClock(lapTime));
                 editor.putFloat(PluginInstance.DISTANCE, distance);
                 editor.putFloat(PluginInstance.SPEED, speed);
+                editor.putFloat(PluginInstance.CURRENTRYTHM, currentRythm);
                 editor.putInt(PluginInstance.ENDTIME, lapTime);
                 if(fullPositions.size() > 0){
                     allSpots += lastKnownLocation.getLatitude()+"#"+lastKnownLocation.getLongitude()+"#"+lastKnownLocation.getAccuracy()+"|";
@@ -236,10 +244,26 @@ public class LocationService extends Service {
                         if(positions.size() > 0){
                             Location current = positions.get(positions.size() - 1);
                             if(valid){
-                                float singleDistance = current.distanceTo(lastKnownLocation);
+                                singleDistance = current.distanceTo(lastKnownLocation);
+                                float rawPace = ((float)(lapTime - lastRecordedTime)/60)/(singleDistance/1000);
+                                float remaining = rawPace%1;
+                                currentRythm = (rawPace - remaining) + (remaining * 0.6f);
+                                Log.d("Rythm", "time" + (lapTime-lastRecordedTime) + " distance: "+ singleDistance + " Rythm: " + currentRythm + " res: " + remaining + " raw" + rawPace);
+                                Log.d("Rythm", "distance in KM " + singleDistance/1000 + " time in minutes: " + (float)(lapTime - lastRecordedTime)/60);
                                 speed = lastKnownLocation.getSpeed() * 3.6f;
                                 distance += singleDistance;
+                                currentKMRythm = ((float)((lastKMTime - lapTime)/60))/(distance/1000);
+                                float rem = currentKMRythm%1;
+                                currentKMRythm = (currentKMRythm - rem) + (rem * 0.6f);
+                                if(distance > (paces.size() + 1) * 1000){
+                                    currentKMRythm = ((float)((lastKMTime - lapTime)/60))/1;
+                                    rem = currentKMRythm%1;
+                                    currentKMRythm = (currentKMRythm - rem) + (rem * 0.6f);
+                                    paces.add(currentKMRythm);
+                                    lastKMTime = lapTime;
+                                }
                                 positions.add(lastKnownLocation);
+                                lastRecordedTime = lapTime;
                                 valid = false;
                             }
                         }else{
@@ -253,10 +277,19 @@ public class LocationService extends Service {
 
     @Override
     public void onDestroy() {
-        thread.interrupt();
+        String pacesAsText = "";
+        paces.add(currentKMRythm);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        for(int i = 0; i < paces.size(); i++){
+            pacesAsText += paces.get(i).toString() + "#";
+        }
+        editor.putString(PluginInstance.LISTRYTHM, pacesAsText);
+        editor.apply();
+        Log.d("DESTROYING", "onDestroy: destroying IT");
         stopForeground(true);
         stopSelf();
         handler.removeCallbacks(Update);
+        thread.interrupt();
         super.onDestroy();
     }
 }

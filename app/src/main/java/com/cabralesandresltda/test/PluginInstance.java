@@ -2,6 +2,7 @@ package com.cabralesandresltda.test;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Application;
 import android.content.ComponentName;
 import android.content.Context;
@@ -27,6 +28,7 @@ import java.util.Set;
 public final class PluginInstance extends Application {
 
     public static Activity unityActivity;
+    public static Intent intent;
     static double latitude;
     static double longitude;
     static float speed;
@@ -41,6 +43,8 @@ public final class PluginInstance extends Application {
     static final String LOCATIONS="locations";
     static final String ENDDISTANCE="enddistance";
     static final String ENDTIME="endtime";
+    static final String CURRENTRYTHM="currentrythm";
+    static final String LISTRYTHM="listrythm";
     static final String AVGSPEED="avgspeed";
     static final String DISTANCETO="todistance";
 
@@ -63,18 +67,8 @@ public final class PluginInstance extends Application {
                     }, PackageManager.PERMISSION_GRANTED);
         }
         */
-        perms[0] = Manifest.permission.ACCESS_FINE_LOCATION;
-        if(ContextCompat.checkSelfPermission(unityActivity, Manifest.permission.ACCESS_FINE_LOCATION)
-        != PackageManager.PERMISSION_GRANTED){
-            Log.i("LOCATION", "Permission isn't granted");
-            ActivityCompat.requestPermissions(PluginInstance.unityActivity, perms, 1);
-        }
-        perms[0] = Manifest.permission.ACCESS_BACKGROUND_LOCATION;
-        if(ContextCompat.checkSelfPermission(unityActivity, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                != PackageManager.PERMISSION_GRANTED){
-            Log.i("LOCATION", "Permission isn't granted");
-            ActivityCompat.requestPermissions(PluginInstance.unityActivity, perms, 1);
-        }
+
+        requestPermission();
     }
     public String Toast(String msg){
         String[] perms = new String[1];
@@ -102,16 +96,23 @@ public final class PluginInstance extends Application {
         return true;
     }
     public static void requestPermission(){
+        AlertDialog.Builder builder = new AlertDialog.Builder(PluginInstance.unityActivity);
+
+        builder.setMessage("Este aplicativo precisa usar a localização o tempo todo para registrar o percurso das atividades")
+                .setTitle("Conceda Acesso à Localização");
+        AlertDialog dialog = builder.create();
         String[] perms = new String[1];
         perms[0] = Manifest.permission.ACCESS_FINE_LOCATION;
         if(ContextCompat.checkSelfPermission(unityActivity, Manifest.permission.ACCESS_FINE_LOCATION)
                 != PackageManager.PERMISSION_GRANTED){
+            dialog.show();
             Log.i("LOCATION", "Permission isn't granted");
             ActivityCompat.requestPermissions(PluginInstance.unityActivity, perms, 1);
         }else{
             perms[0] = Manifest.permission.ACCESS_BACKGROUND_LOCATION;
             if(ContextCompat.checkSelfPermission(unityActivity, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
                     != PackageManager.PERMISSION_GRANTED){
+                dialog.show();
                 Log.i("LOCATION", "Permission isn't granted");
                 ActivityCompat.requestPermissions(PluginInstance.unityActivity, perms, 1);
             }
@@ -123,13 +124,14 @@ public final class PluginInstance extends Application {
         editor.clear();
         editor.putString(TIME, "00:00");
         editor.apply();
-        unityActivity.startForegroundService(new Intent(unityActivity, LocationService.class));
+        intent = new Intent(unityActivity, LocationService.class);
+        unityActivity.startForegroundService(intent);
         StartRun();
     }
     public static void StopService(){
         Intent serviceIntent = new Intent(unityActivity, LocationService.class);
-        unityActivity.stopService(serviceIntent);
-        //StopRun();
+        Log.d("FINISHING IT", unityActivity.stopService(intent) + " " + intent.getDataString());
+        StopRun();
         //FinishRun();
     }
     public static String getLatitude(){
@@ -142,6 +144,11 @@ public final class PluginInstance extends Application {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         return sharedPreferences.getFloat(SPEED, 0f);
+    }
+    public static float getRythm(){
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        return sharedPreferences.getFloat(CURRENTRYTHM, 0f);
     }
     public static float getDistance(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
@@ -168,6 +175,10 @@ public final class PluginInstance extends Application {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         return sharedPreferences.getString(LOCATIONS, "DEFAULT");
+    }    public static String getAllPaces(){
+        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        return sharedPreferences.getString(LISTRYTHM, "DEFAULT");
     }
     public static String getCurrentPosition(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
