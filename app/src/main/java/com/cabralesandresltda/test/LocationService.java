@@ -56,8 +56,8 @@ public class LocationService extends Service {
     public SharedPreferences sharedPreferences;
     LocationManager locationManager;
     float speed;
-    float maxspeed;
-    float minspeed;
+    float maxspeed = 0;
+    float minspeed = 100;
     float distance;
     float currentRythm = 0;
     float currentKMRythm = 0;
@@ -65,20 +65,16 @@ public class LocationService extends Service {
     public float maxDistance = 100;
     int wait = 10;
     float lastRecordedTime = 0;
-    Location lastKnownLocation = null;
 
     int exactLapTime;
     int timeStarted;
     private int lapTime;
     private float lastKMTime = 0;
-    public int updates = 0;
     ArrayList<Location> positions = new ArrayList<Location>();
     ArrayList<Float> KMReachTime = new ArrayList<Float>();
     String allSpots = "";
     float singleDistance = 0;
     String allPaces = "";
-
-    Set<String> trackedLocations = new HashSet<String>();
 
 
     @Nullable
@@ -144,8 +140,14 @@ public class LocationService extends Service {
         public void run() {
 
             SharedPreferences.Editor editor = sharedPreferences.edit();
-                lapTime = ((int) System.currentTimeMillis() / 1000) - (timeStarted/10);
+            if(wait <= 0){
+                lapTime = ((int) System.currentTimeMillis() / 1000) - (timeStarted/10) - 10;
                 editor.putString(PluginInstance.TIME, formatClock(lapTime));
+            }else{
+                wait--;
+                editor.putString(PluginInstance.TIME, wait + "");
+            }
+
                 editor.apply();
             handler.postDelayed(this, 1000);
         }
@@ -164,11 +166,6 @@ public class LocationService extends Service {
             clock = String.format("%02d:%02d", minutes, seconds);
         }
         return clock;
-    }
-
-    public void SyncPositions() {
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putStringSet(PluginInstance.SPOTLIST, trackedLocations);
     }
 
     private void requestLocation() {
@@ -191,13 +188,22 @@ public class LocationService extends Service {
                         Location current = positions.get(positions.size() - 1);
                         float dist = current.distanceTo(location);
                         if(dist >= minDistance && dist <= maxDistance){
-                            exactLapTime = ((int) System.currentTimeMillis()/100) - timeStarted;
+                            exactLapTime = ((int) System.currentTimeMillis()/100) - timeStarted - 10;
                             float rawPace = ((float)(exactLapTime - lastRecordedTime)/600)/(singleDistance/1000);
                             float remaining = rawPace%1;
                             currentRythm = (rawPace - remaining) + (remaining * 0.6f);
                             positions.add(location);
                             distance += dist;
-                            speed = location.getSpeed();
+                            speed = location.getSpeed() * 3.6f;
+                            if(speed < minspeed){
+                                minspeed = speed;
+                                editor.putFloat(PluginInstance.MINSPEED, minspeed);
+                            }
+                            if(speed > maxspeed){
+                                maxspeed = speed;
+                                editor.putFloat(PluginInstance.MAXSPEED, maxspeed);
+
+                            }
                             if(distance > (KMReachTime.size() + 1) * 1000){
                                 KMReachTime.add(lapTime - lastKMTime);
                                 lastKMTime = lapTime;
