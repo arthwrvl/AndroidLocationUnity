@@ -39,12 +39,14 @@ public final class PluginInstance extends Application {
     static final String TIME="time";
     static final String RUNNING="running";
     static final String SPEED="speed";
-    static final String LATLONG="latlong";
-    static final String LOCATIONS="locations";
+    static final String CURRENTLOCATION="currentlocation";
+    static final String SPOTLIST="spotlist";
     static final String ENDDISTANCE="enddistance";
     static final String ENDTIME="endtime";
     static final String CURRENTRYTHM="currentrythm";
     static final String LISTRYTHM="listrythm";
+    static final String MAXSPEED="maxspeed";
+    static final String MINSPEED="minspeed";
     static final String AVGSPEED="avgspeed";
     static final String DISTANCETO="todistance";
 
@@ -137,7 +139,7 @@ public final class PluginInstance extends Application {
     public static String getLatitude(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
-        String latitude = sharedPreferences.getString(LATLONG, "DEFAULT");
+        String latitude = sharedPreferences.getString(CURRENTLOCATION, "DEFAULT");
         return latitude;
     }
     public static float getSpeed(){
@@ -174,7 +176,7 @@ public final class PluginInstance extends Application {
     public static String getAllSpots(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
-        return sharedPreferences.getString(LOCATIONS, "DEFAULT");
+        return sharedPreferences.getString(SPOTLIST, "DEFAULT");
     }    public static String getAllPaces(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
@@ -185,7 +187,7 @@ public final class PluginInstance extends Application {
         SharedPreferences.Editor editor = sharedPreferences.edit();
         String latlong = "corsa";
         if(sharedPreferences.getBoolean(RUNNING, false)){
-            latlong = sharedPreferences.getString(LATLONG, "DEFAULT");
+            latlong = sharedPreferences.getString(CURRENTLOCATION, "DEFAULT");
         }
         else{
             latlong = "Bola";
@@ -209,7 +211,7 @@ public final class PluginInstance extends Application {
     public static String SyncPositions(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
-        Set<String> set = sharedPreferences.getStringSet(LOCATIONS, new HashSet<>());
+        Set<String> set = sharedPreferences.getStringSet(SPOTLIST, new HashSet<>());
         List<String> points = new ArrayList<String>();
         for (String x : set)
             points.add(x);

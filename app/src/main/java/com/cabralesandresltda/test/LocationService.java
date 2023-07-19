@@ -55,10 +55,9 @@ public class LocationService extends Service {
 
     public SharedPreferences sharedPreferences;
     LocationManager locationManager;
-    boolean valid;
-    double latitude;
-    double longitude;
     float speed;
+    float maxspeed;
+    float minspeed;
     float distance;
     float currentRythm = 0;
     float currentKMRythm = 0;
@@ -74,8 +73,7 @@ public class LocationService extends Service {
     private float lastKMTime = 0;
     public int updates = 0;
     ArrayList<Location> positions = new ArrayList<Location>();
-    ArrayList<Float> paces = new ArrayList<Float>();
-    ArrayList<Location> fullPositions = new ArrayList<Location>();
+    ArrayList<Float> KMReachTime = new ArrayList<Float>();
     String allSpots = "";
     float singleDistance = 0;
     String allPaces = "";
@@ -146,31 +144,9 @@ public class LocationService extends Service {
         public void run() {
 
             SharedPreferences.Editor editor = sharedPreferences.edit();
-            if(wait <= 0){
-                updates++;
-                lapTime = ((int) System.currentTimeMillis() / 1000) - (timeStarted/10) - 10;
+                lapTime = ((int) System.currentTimeMillis() / 1000) - (timeStarted/10);
                 editor.putString(PluginInstance.TIME, formatClock(lapTime));
-                editor.putFloat(PluginInstance.DISTANCE, distance);
-                editor.putFloat(PluginInstance.SPEED, speed);
-                editor.putFloat(PluginInstance.CURRENTRYTHM, currentRythm);
-                editor.putInt(PluginInstance.ENDTIME, lapTime);
-                if(fullPositions.size() > 0){
-                    allSpots += lastKnownLocation.getLatitude()+"#"+lastKnownLocation.getLongitude()+"#"+lastKnownLocation.getAccuracy()+"|";
-                    editor.putString(PluginInstance.LATLONG, lastKnownLocation.getLatitude()+"#"+lastKnownLocation.getLongitude()+"#"+lastKnownLocation.getAccuracy()+"|");
-                    editor.putString(PluginInstance.LOCATIONS, allSpots);
-                }
                 editor.apply();
-                Log.d("AHAHAHA", "run: " + formatClock(lapTime));
-                Log.d("AHAHAHA", "run: " + distance);
-                Log.d("AHAHAHA", "run: " + speed);
-
-
-            }else{
-                wait--;
-                editor.putString(PluginInstance.TIME, wait + "");
-                editor.apply();
-                Log.d("AHAHAHA", "run: " + wait);
-            }
             handler.postDelayed(this, 1000);
         }
     };
@@ -192,7 +168,7 @@ public class LocationService extends Service {
 
     public void SyncPositions() {
         SharedPreferences.Editor editor = sharedPreferences.edit();
-        editor.putStringSet(PluginInstance.LOCATIONS, trackedLocations);
+        editor.putStringSet(PluginInstance.SPOTLIST, trackedLocations);
     }
 
     private void requestLocation() {
@@ -206,11 +182,38 @@ public class LocationService extends Service {
             // for Activity#requestPermissions for more details.
             return;
         }
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 10, 1, new LocationListener() {
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 2, new LocationListener() {
+
             @Override
             public void onLocationChanged(Location location) {
                 SharedPreferences.Editor editor = sharedPreferences.edit();
-                if(lastKnownLocation == null){
+                    if(positions.size() > 0){
+                        Location current = positions.get(positions.size() - 1);
+                        float dist = current.distanceTo(location);
+                        if(dist >= minDistance && dist <= maxDistance){
+                            exactLapTime = ((int) System.currentTimeMillis()/100) - timeStarted;
+                            float rawPace = ((float)(exactLapTime - lastRecordedTime)/600)/(singleDistance/1000);
+                            float remaining = rawPace%1;
+                            currentRythm = (rawPace - remaining) + (remaining * 0.6f);
+                            positions.add(location);
+                            distance += dist;
+                            speed = location.getSpeed();
+                            if(distance > (KMReachTime.size() + 1) * 1000){
+                                KMReachTime.add(lapTime - lastKMTime);
+                                lastKMTime = lapTime;
+                            }
+                            String spot = location.getLatitude()+"#"+location.getLongitude()+"#"+location.getAccuracy()+"|";
+                            allSpots += spot;
+                            editor.putString(PluginInstance.CURRENTLOCATION, spot);
+                            editor.putString(PluginInstance.SPOTLIST, allSpots);
+                            lastRecordedTime = exactLapTime;
+                        }
+                    }else{
+                        positions.add(location);
+                        editor.putString(PluginInstance.CURRENTLOCATION, location.getLatitude()+"#"+location.getLongitude()+"#"+location.getAccuracy()+"|");
+                    }
+                editor.apply();
+                /*if(lastKnownLocation == null){
                     lastKnownLocation = location;
                 }
                 if(wait <= 0){
@@ -268,7 +271,7 @@ public class LocationService extends Service {
                             positions.add(lastKnownLocation);
                         }
                     }
-                }
+                }*/
             }
         });
     }
@@ -277,8 +280,8 @@ public class LocationService extends Service {
     public void onDestroy() {
         String pacesAsText = "";
         SharedPreferences.Editor editor = sharedPreferences.edit();
-        for(int i = 0; i < paces.size(); i++){
-            pacesAsText += paces.get(i).toString() + "#";
+        for(int i = 0; i < KMReachTime.size(); i++){
+            pacesAsText += KMReachTime.get(i).toString() + "#";
         }
         pacesAsText += lapTime - lastKMTime + "#";
 
