@@ -6,53 +6,45 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
-import android.graphics.drawable.Icon;
+
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+
 import android.os.Build;
-import android.os.Bundle;
+
+import android.os.CancellationSignal;
 import android.os.Handler;
 import android.os.HandlerThread;
+
+import android.os.Vibrator;
 import android.os.IBinder;
-import android.os.Binder;
+
 import android.os.Looper;
-import android.preference.Preference;
+
 import android.preference.PreferenceManager;
 import android.util.Log;
 
-import androidx.annotation.NonNull;
+
 import androidx.annotation.Nullable;
-import androidx.annotation.RequiresApi;
+
 import androidx.core.app.ActivityCompat;
-import androidx.core.app.NotificationCompat;
+
 import androidx.core.app.NotificationManagerCompat;
-
-import com.google.android.gms.location.FusedLocationProviderClient;
-import com.google.android.gms.location.LocationCallback;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationResult;
-import com.google.android.gms.location.LocationServices;
-
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
-import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class LocationService extends Service {
 
     HandlerThread thread = new HandlerThread("TimerThread");
     private final Handler handler = new Handler();
-
+    private final Handler handler2 = new Handler();
+    private Context context;
     public SharedPreferences sharedPreferences;
     LocationManager locationManager;
     float speed;
@@ -65,11 +57,12 @@ public class LocationService extends Service {
     public float maxDistance = 100;
     int wait = 10;
     float lastRecordedTime = 0;
-
+    Location lastKnownLocation = null;
     int exactLapTime;
     int timeStarted;
     private int lapTime;
     private float lastKMTime = 0;
+    private Vibrator vibrator;
     ArrayList<Location> positions = new ArrayList<Location>();
     ArrayList<Float> KMReachTime = new ArrayList<Float>();
     String allSpots = "";
@@ -118,40 +111,87 @@ public class LocationService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+        positions = new ArrayList<>();
+        allSpots = "";
+        distance = 0;
         createNotificationChannel();
         startNotification();
-        requestLocation();
-        timeStarted = (int)System.currentTimeMillis() / 100;
-        handler.removeCallbacks(Update);
-        handler.postDelayed(Update, 1000);
+        timeStarted = (int) System.currentTimeMillis() / 100;
+        handler2.removeCallbacks(UpdateLocation);
+        handler2.postDelayed(UpdateLocation, 1000);
         return START_NOT_STICKY;
     }
 
     @Override
     public void onCreate() {
         super.onCreate();
+        context = this;
         sharedPreferences = PreferenceManager.getDefaultSharedPreferences(this);
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
     }
 
-
-    private Runnable Update = new Runnable() {
+    private Runnable UpdateLocation = new Runnable() {
         @Override
         public void run() {
-
+            if (ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                return;
+            }
             SharedPreferences.Editor editor = sharedPreferences.edit();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                locationManager.getCurrentLocation(LocationManager.GPS_PROVIDER, new CancellationSignal(), context.getMainExecutor(), location -> lastKnownLocation = location);
+            }else{
+                locationManager.requestSingleUpdate(LocationManager.GPS_PROVIDER, location -> lastKnownLocation = location, Looper.myLooper());
+            }
             if(wait <= 0){
-                lapTime = ((int) System.currentTimeMillis() / 1000) - (timeStarted/10) - 10;
+                lapTime = ((int) System.currentTimeMillis() / 1000) - (timeStarted / 10) - 10;
                 editor.putString(PluginInstance.TIME, formatClock(lapTime));
+                editor.putInt(PluginInstance.ENDTIME, lapTime);
+                if(lastKnownLocation != null){
+                    if(positions.size() > 0){
+                        Location current = positions.get(positions.size() - 1);
+                        float dist = current.distanceTo(lastKnownLocation);
+                        if(dist >= minDistance){
+                            positions.add(lastKnownLocation);
+                            exactLapTime = ((int) System.currentTimeMillis() / 100) - timeStarted - 10;
+                            float rawPace = ((float) (exactLapTime - lastRecordedTime) / 600) / (dist / 1000);
+                            float remaining = rawPace % 1;
+                            currentRythm = (rawPace - remaining) + (remaining * 0.6f);
+                            positions.add(lastKnownLocation);
+                            distance += dist;
+                            speed = lastKnownLocation.getSpeed() * 3.6f;
+                            String spot = lastKnownLocation.getLatitude() + "#" + lastKnownLocation.getLongitude() + "#" + lastKnownLocation.getAccuracy() + "|";
+                            if(positions.size() % 3 == 0){
+                                allSpots += spot;
+                            }
+                            editor.putString(PluginInstance.CURRENTLOCATION, spot);
+                            editor.putString(PluginInstance.SPOTLIST, allSpots);
+                            editor.putFloat(PluginInstance.DISTANCE, distance);
+                            editor.putFloat(PluginInstance.SPEED, speed);
+                            editor.putFloat(PluginInstance.CURRENTRYTHM, currentRythm);
+                            lastRecordedTime = exactLapTime;
+                        }
+                    }else{
+                        positions.add(lastKnownLocation);
+                        editor.putString(PluginInstance.CURRENTLOCATION, lastKnownLocation.getLatitude() + "#" + lastKnownLocation.getLongitude() + "#" + lastKnownLocation.getAccuracy() + "|");
+                    }
+                }
             }else{
                 wait--;
                 editor.putString(PluginInstance.TIME, wait + "");
             }
+            editor.apply();
+            handler2.postDelayed(this, 1000);
+    }
+};
 
-                editor.apply();
-            handler.postDelayed(this, 1000);
-        }
-    };
 
     private String formatClock(int seconds){
         String clock;
@@ -168,120 +208,6 @@ public class LocationService extends Service {
         return clock;
     }
 
-    private void requestLocation() {
-        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    Activity#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for Activity#requestPermissions for more details.
-            return;
-        }
-        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000, 2, new LocationListener() {
-
-            @Override
-            public void onLocationChanged(Location location) {
-                SharedPreferences.Editor editor = sharedPreferences.edit();
-                    if(positions.size() > 0){
-                        Location current = positions.get(positions.size() - 1);
-                        float dist = current.distanceTo(location);
-                        if(dist >= minDistance && dist <= maxDistance){
-                            exactLapTime = ((int) System.currentTimeMillis()/100) - timeStarted - 10;
-                            float rawPace = ((float)(exactLapTime - lastRecordedTime)/600)/(singleDistance/1000);
-                            float remaining = rawPace%1;
-                            currentRythm = (rawPace - remaining) + (remaining * 0.6f);
-                            positions.add(location);
-                            distance += dist;
-                            speed = location.getSpeed() * 3.6f;
-                            if(speed < minspeed){
-                                minspeed = speed;
-                                editor.putFloat(PluginInstance.MINSPEED, minspeed);
-                            }
-                            if(speed > maxspeed){
-                                maxspeed = speed;
-                                editor.putFloat(PluginInstance.MAXSPEED, maxspeed);
-
-                            }
-                            if(distance > (KMReachTime.size() + 1) * 1000){
-                                KMReachTime.add(lapTime - lastKMTime);
-                                lastKMTime = lapTime;
-                            }
-                            String spot = location.getLatitude()+"#"+location.getLongitude()+"#"+location.getAccuracy()+"|";
-                            allSpots += spot;
-                            editor.putString(PluginInstance.CURRENTLOCATION, spot);
-                            editor.putString(PluginInstance.SPOTLIST, allSpots);
-                            lastRecordedTime = exactLapTime;
-                        }
-                    }else{
-                        positions.add(location);
-                        editor.putString(PluginInstance.CURRENTLOCATION, location.getLatitude()+"#"+location.getLongitude()+"#"+location.getAccuracy()+"|");
-                    }
-                editor.apply();
-                /*if(lastKnownLocation == null){
-                    lastKnownLocation = location;
-                }
-                if(wait <= 0){
-                    if(fullPositions.size() > 0){
-                        Location current = positions.get(positions.size() - 1);
-                        float dist = current.distanceTo(location);
-                        if(dist > 2 && dist < 25){
-                            fullPositions.add(location);
-                        }
-                    }else{
-                        fullPositions.add(location);
-                    }
-                    if(maxDistance != 0 && minDistance != 0){
-                        if(positions.size() > 0){
-
-                            Location current = positions.get(positions.size() - 1);
-                            float dist = current.distanceTo(location);
-                            editor.putString(PluginInstance.DISTANCETO, dist + " " + positions.size() + " " + updates);
-                            editor.apply();
-                                if(dist > minDistance){
-                                    lastKnownLocation = location;
-                                    valid = true;
-                                }
-                        }else{
-                            lastKnownLocation = location;
-                            valid = true;
-                        }
-                    }else{
-                        lastKnownLocation = location;
-                        valid = true;
-                    }
-                    if(lastKnownLocation != null){
-                        if(positions.size() > 0){
-                            Location current = positions.get(positions.size() - 1);
-                            exactLapTime = ((int) System.currentTimeMillis()/100) - timeStarted - 10;
-                            if(valid){
-                                singleDistance = current.distanceTo(lastKnownLocation);
-                                float rawPace = ((float)(exactLapTime - lastRecordedTime)/600)/(singleDistance/1000);
-                                float remaining = rawPace%1;
-                                currentRythm = (rawPace - remaining) + (remaining * 0.6f);
-                                Log.d("Rythm", "time" + (exactLapTime-lastRecordedTime) + " distance: "+ singleDistance + " Rythm: " + currentRythm + " res: " + remaining + " raw" + rawPace);
-                                Log.d("Rythm", "distance in KM " + singleDistance/1000 + " time in minutes: " + ((float)(exactLapTime - lastRecordedTime)/10));
-                                speed = lastKnownLocation.getSpeed() * 3.6f;
-                                distance += singleDistance;
-
-                                if(distance > (paces.size() + 1) * 1000){
-                                    paces.add(lapTime - lastKMTime);
-                                    lastKMTime = lapTime;
-                                }
-                                positions.add(lastKnownLocation);
-                                lastRecordedTime = exactLapTime;
-                                valid = false;
-                            }
-                        }else{
-                            positions.add(lastKnownLocation);
-                        }
-                    }
-                }*/
-            }
-        });
-    }
-
     @Override
     public void onDestroy() {
         String pacesAsText = "";
@@ -293,10 +219,9 @@ public class LocationService extends Service {
 
         editor.putString(PluginInstance.LISTRYTHM, pacesAsText);
         editor.apply();
-        Log.d("DESTROYING", "onDestroy: destroying IT");
+        handler2.removeCallbacks(UpdateLocation);
         stopForeground(true);
         stopSelf();
-        handler.removeCallbacks(Update);
         thread.interrupt();
         super.onDestroy();
     }

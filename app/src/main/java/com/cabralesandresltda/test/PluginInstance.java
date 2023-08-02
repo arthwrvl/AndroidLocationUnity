@@ -4,37 +4,24 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Application;
-import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.os.Build;
-import android.os.IBinder;
 import android.preference.PreferenceManager;
 import android.util.Log;
-import android.widget.Toast;
 
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 public final class PluginInstance extends Application {
 
+    public static PluginInstance SINGLETON;
     public static Activity unityActivity;
     public static Intent intent;
-    static double latitude;
-    static double longitude;
-    static float speed;
     static Context appContext;
-    Date currentDate;
-    LocationService mServer;
     static final String DISTANCE="distance";
     static final String TIME="time";
     static final String RUNNING="running";
@@ -52,25 +39,22 @@ public final class PluginInstance extends Application {
 
 
 
-
     public static void ReceiveActivityInstance(Activity tActivity){
         unityActivity = tActivity;
 
         String[] perms = new String[1];
-        /*
-        perms[0] = Manifest.permission.ACCESS_BACKGROUND_LOCATION;
-        if(ContextCompat.checkSelfPermission(unityActivity, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-                != PackageManager.PERMISSION_GRANTED){
-            Log.i("LOCATION", "Permission isn't granted");
-            ActivityCompat.requestPermissions(unityActivity,
-                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION,
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                    }, PackageManager.PERMISSION_GRANTED);
-        }
-        */
 
         requestPermission();
+    }
+    public PluginInstance getInstance(){
+        if(SINGLETON == null){
+            synchronized (PluginInstance.class){
+                if(SINGLETON == null){
+                    SINGLETON = this;
+                }
+            }
+        }
+        return SINGLETON;
     }
     public String Toast(String msg){
         String[] perms = new String[1];
@@ -177,7 +161,8 @@ public final class PluginInstance extends Application {
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         return sharedPreferences.getString(SPOTLIST, "DEFAULT");
-    }    public static String getAllPaces(){
+    }    
+    public static String getAllPaces(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         return sharedPreferences.getString(LISTRYTHM, "DEFAULT");
@@ -207,15 +192,6 @@ public final class PluginInstance extends Application {
         editor.putBoolean(RUNNING, false);
         editor.apply();
         Log.i("LOCATION", "RUN STOPPED");
-    }
-    public static String SyncPositions(){
-        SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
-        SharedPreferences.Editor editor = sharedPreferences.edit();
-        Set<String> set = sharedPreferences.getStringSet(SPOTLIST, new HashSet<>());
-        List<String> points = new ArrayList<String>();
-        for (String x : set)
-            points.add(x);
-        return points.toString();
     }
     public static void FinishRun(){
         SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(appContext);
